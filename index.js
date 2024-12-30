@@ -13,12 +13,18 @@ const mongoose=require('mongoose');
 mongoose.connect(process.env.My_DB).then(() => console.log('Database connected successfully'))
 .catch((err) => console.error('Database connection error:', err));
 
-const usernameSchema= new mongoose.Schema({username: String,
-  description: String,
-  duration: Number,
-  date: Date
+const exerciseSessionSchema=new mongoose.Schema({
+  description: {type: String, required: true},
+  duration: {type: String, required: true},
+  date: String
 })
+
+const usernameSchema= new mongoose.Schema({username: String,
+  logs:[exerciseSessionSchema]
+})
+
 const UserName= mongoose.model('username',usernameSchema)
+const Exercises=mongoose.model('exercises',exerciseSessionSchema)
 
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
@@ -54,7 +60,6 @@ app.post('/api/users',(req, res)=>{
 app.get('/api/users', (req, res)=>{
   UserName.find().exec()
   .then((data)=>{
-    console.log(data)
     result=data.map(data=>
       ({
         username: data.username,
@@ -65,3 +70,33 @@ app.get('/api/users', (req, res)=>{
   })
 })
 
+app.post('/api/users/:_id/exercises',(req, res)=>{
+  let id=req.params._id
+  let description=req.body["description"]
+  let duration=req.body["duration"]
+  let date=req.body["date"]
+  if(!date){
+    date=new Date().toISOString().substring(0, 10)
+  }
+  const information= new Exercises({
+    description: description,
+    duration: duration,
+    date: date
+  })
+  information.save().then(()=>{
+      UserName.findByIdAndUpdate({_id: id},
+        {$push : {logs : information}},
+        {new: true}
+      ).exec().then(data=>{
+        if(date){
+          result['username']=data.username
+          result['_id']=data._id
+          result['date']= new Date(date).toDateString()
+          result['description']=information.description
+          result['duration']=information.duration
+          res.json(result)
+        }
+      }).catch(error=>res.status(500).json({error: error.message}))
+  }).catch(error=>res.status(500).json({error: error.message}))
+  
+})
